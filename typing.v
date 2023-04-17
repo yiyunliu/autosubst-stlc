@@ -4,10 +4,13 @@ Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 Require Import stlc.
 From Hammer Require Import Tactics Hammer.
+Require Import Coq.Program.Equality.
 
 Definition context (n : nat) := fin n -> ty.
 
 Reserved Notation "Gamma ⊢ a : A" (at level 80, a at level 99).
+
+(* Statics *)
 
 Inductive typing {m : nat} (Γ : context m) : tm m -> ty -> Prop :=
 | T_Var i : Γ ⊢ var_tm i : Γ i
@@ -17,6 +20,8 @@ Inductive typing {m : nat} (Γ : context m) : tm m -> ty -> Prop :=
 where "Γ ⊢ a : A" := (typing Γ a A).
 
 #[export]Hint Constructors typing : core.
+
+(* Structural rules *)
 
 (* Weakening in Locally-nameless *)
 Lemma renaming
@@ -56,5 +61,51 @@ Proof.
   hauto q:on inv:option,typing ctrs:typing use:morphing.
 Qed.
 
+(* Dynamics *)
+
 Reserved Notation "a '⤳' b" (at level 80).
-Inductive pstep :
+Inductive Red {n : nat} : tm n -> tm n -> Prop :=
+| R_AppAbs (a : tm (S n)) (b : tm n) :
+  Red (app (lam a) b) (subst_tm (scons b ids) a)
+| R_App (a a' b : tm n) :
+  Red a a' ->
+  Red (app a b) (app a' b)
+where "a '⤳' b" := (Red a b).
+
+Definition is_value {n : nat} (m : tm n) : bool :=
+  match m with
+  | unit => true
+  | lam _ => true
+  | _ => false
+  end.
+
+(* Type soundness *)
+
+Lemma preservation (n : nat) (a a' : tm n) (h : a ⤳ a') :
+  forall Γ A, Γ ⊢ a : A -> Γ ⊢ a' : A.
+  (* why cannot I pass in n here? *)
+  (* because the S n dependency? *)
+  elim : a a' / h;
+    [hauto l:on inv:typing use:subst_one
+    | hauto lq:on rew:off inv:typing ctrs:typing].
+Qed.
+
+
+Lemma empty_lam_pi_inv : forall (a : tm 0) (A B : ty),
+    null ⊢ a : TPi A B ->
+    is_value a ->
+    exists a0, a = lam a0.
+Proof.
+  hauto q:on inv:typing.
+Qed.
+
+(* Progress *)
+Lemma progress (a : tm 0) (A  :ty) (h : null ⊢ a : A) :
+  is_value a \/ exists a', a ⤳ a'.
+Proof.
+  dependent induction h.
+  - by [].
+  - sfirstorder.
+  - hauto inv:- ctrs:Red l:on use:empty_lam_pi_inv.
+  - sfirstorder.
+Qed.
