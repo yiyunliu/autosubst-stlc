@@ -27,11 +27,12 @@ Proof.
     asimpl.
     f_equal.
 Qed.
+
 (* Statics *)
 (* The index m tells us only 0..(m-1) in Γ matters *)
 Inductive Typing (m : nat) (Γ : context) : tm -> tm -> Prop :=
 | T_Var i :
-  i < m ->
+    i < m ->
     (* ------------------------------- *)
     Typing m Γ (var_tm i) (dep_ith Γ i)
 
@@ -96,6 +97,9 @@ Proof.
       rewrite -hΔ1.
       by asimpl.
   - move => n Γ a A B b h0 ih0 h1 ih1 m ξ Δ hΔ.
+    (* This mess explains why the cbpv proof uses equations as premises
+       to make Typing G a A rely only on vars so the IH becomes easier to apply  *)
+    (* Use ssreflect to suppress the substitution of the second occurence? *)
     replace (ren_tm ξ (app a b)) with
       (app (ren_tm ξ a) (ren_tm ξ b));
       last by asimpl.
@@ -106,25 +110,78 @@ Proof.
 Qed.
 
 Lemma morphing
-  (n : nat) (Γ : context) (a : tm) (A : ty)
+  (n : nat) (Γ : context) (a : tm) (A : tm)
   (h : Typing n Γ a A) :
   forall m (ξ : fin -> tm) (Δ : context),
-  (forall i, i < n -> Typing m Δ (ξ i) (Γ i)) ->
+  (forall i, i < n -> Typing m Δ (ξ i) (subst_tm ξ (dep_ith Γ i))) ->
   (* ---------------------------------------- *)
-  (Typing m Δ (subst_tm ξ a)  A).
+  (Typing m Δ (subst_tm ξ a) (subst_tm ξ A)).
 Proof.
   elim : n Γ a A / h.
   - sfirstorder.
-  - move => n Γ A a B h_body ih m ξ Δ hΔ /=.
-    asimpl.
-    constructor.
-    apply ih.
-    case => *.
-    + hauto lq:on inv:-  ctrs:Typing solve:lia.
-    + asimpl.
-      hauto lq:on use:renaming unfold:shift solve:lia.
-  - hauto lq:on ctrs:Typing.
   - sfirstorder.
+  - move => m Γ A B s1 s2 h0 ih0 h1 ih1 x ξ Δ hΔ /=.
+    apply T_Pi with (s1 := s1); eauto.
+    (* Clear ih0 from the context and apply ih1 *)
+    apply : {ih0} ih1.
+    case => [| i /Arith_prebase.lt_S_n] ?.
+    + rewrite /dep_ith.
+      asimpl.
+      (* Again, maybe derive an alternative typing judgment lemma to make life easier *)
+      replace (subst_tm (ξ >> ren_tm shift) A) with
+        (ren_tm shift (subst_tm ξ A)); last by asimpl.
+      apply T_Var; lia.
+    + rewrite dep_ith_ren_tm.
+      asimpl.
+      replace (subst_tm (ξ >> ren_tm shift) (dep_ith Γ i)) with
+        (ren_tm shift (subst_tm ξ (dep_ith Γ i))); last by asimpl.
+      apply : renaming; eauto.
+      move => x0 ?.
+      split.
+      * rewrite /dep_ith.
+        by asimpl.
+      * rewrite /shift; lia.
+  - move => n Γ A a B s h0 ih0 h1 ih1 m ξ Δ hΔ /=.
+    apply T_Lam with (s := s) ; eauto.
+    (* Clear ih0 from the context and apply ih1 *)
+    apply : {ih1} ih0.
+    case => [| i /Arith_prebase.lt_S_n] ?.
+    + rewrite /dep_ith.
+      asimpl.
+      (* Again, maybe derive an alternative typing judgment lemma to make life easier *)
+      replace (subst_tm (ξ >> ren_tm shift) A) with
+        (ren_tm shift (subst_tm ξ A)); last by asimpl.
+      apply T_Var; lia.
+    + rewrite dep_ith_ren_tm.
+      asimpl.
+      replace (subst_tm (ξ >> ren_tm shift) (dep_ith Γ i)) with
+        (ren_tm shift (subst_tm ξ (dep_ith Γ i))); last by asimpl.
+      apply : renaming; eauto.
+      move => x0 ?.
+      split.
+      * rewrite /dep_ith.
+        by asimpl.
+      * rewrite /shift; lia.
+  - move => n Γ a A B b h0 ih0 h1 ih1 m ξ Δ hΔ.
+    simpl in ih0.
+    asimpl in ih0.
+    (* replace (ren_tm ξ (app a b)) with *)
+    (*   (app (ren_tm ξ a) (ren_tm ξ b)); *)
+    (*   last by asimpl. *)
+    replace (subst_tm (scons (subst_tm ξ b) ξ) B) with
+      (subst_tm (scons (subst_tm ξ b) ids) (subst_tm (up_tm ξ) B)).
+    econstructor; eauto.
+    asimpl.
+    f_equal.
+    apply FunctionalExtensionality.functional_extensionality.
+    case.
+    by asimpl.
+    move => n0.
+    asimpl.
+    rewrite /up_tm.
+    simpl.
+    asimpl.
+    reflexivity.
 Qed.
 
 Lemma subst_one
