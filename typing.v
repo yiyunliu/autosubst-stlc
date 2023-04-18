@@ -181,13 +181,6 @@ Proof.
 Qed.
 
 
-Definition fin_to_nat (n : nat) (x : fin n) : nat.
-  induction n.
-  - inversion x.
-  - destruct x.
-    exact (1 + IHn f).
-    exact 0.
-Defined.
 
 Definition fin2 : fin 4 := (Some (Some None)).
 Definition fin3 : fin 4 := (Some (Some (Some None))).
