@@ -8,8 +8,26 @@ From Coq Require Import micromega.Lia.
 
 Require Import Coq.Program.Equality.
 
-(* fin n is the set of variables *)
-(* context is indexed by n, which indicates the number of free variables *)
+(* Dynamics *)
+Reserved Notation "a '⤳' b" (at level 80).
+Inductive Red : tm  -> tm  -> Prop :=
+| R_AppAbs (a : tm) (b : tm) :
+  Red (app (lam a) b) (subst_tm (scons b ids) a)
+| R_App (a a' b : tm) :
+  Red a a' ->
+  Red (app a b) (app a' b)
+where "a '⤳' b" := (Red a b).
+
+Definition is_value (m : tm) : bool :=
+  match m with
+  | lam _ => true
+  | type _ => true
+  | pi _ _ => true
+  | _ => false
+  end.
+
+(* Statics *)
+(* context is not indexed because we are using the unscoped version *)
 Definition context := nat -> tm.
 
 Definition shift_p (p : nat) (x : fin) : fin := p + x.
@@ -169,46 +187,45 @@ Proof.
     (*   (app (ren_tm ξ a) (ren_tm ξ b)); *)
     (*   last by asimpl. *)
     replace (subst_tm (scons (subst_tm ξ b) ξ) B) with
-      (subst_tm (scons (subst_tm ξ b) ids) (subst_tm (up_tm ξ) B)).
+      (subst_tm (scons (subst_tm ξ b) ids) (subst_tm (up_tm_tm ξ) B));
+      last by asimpl.
+    (* autosubst doesn't want to rewrite the generic up_tm  *)
+    (* must use the specialized up_tm_tm instead *)
     econstructor; eauto.
-    asimpl.
-    f_equal.
-    apply FunctionalExtensionality.functional_extensionality.
-    case.
-    by asimpl.
-    move => n0.
-    asimpl.
-    rewrite /up_tm.
-    simpl.
-    asimpl.
-    reflexivity.
+
+    (* The following is required if we had used up_tm instead *)
+    (* asimpl. *)
+    (* f_equal. *)
+    (* apply FunctionalExtensionality.functional_extensionality. *)
+    (* case. *)
+    (* by asimpl. *)
+    (* move => n0. *)
+    (* asimpl. *)
+    (* rewrite /up_tm. *)
+    (* simpl. *)
+    (* asimpl. *)
+    (* reflexivity. *)
 Qed.
 
 Lemma subst_one
-  (n : nat) (Γ : fin -> ty) (a : tm)
-  (b : tm) (A B : ty) :
+  (n : nat) (Γ : fin -> tm) (a : tm)
+  (b : tm) (A B : tm) :
   Typing (S n) (A .: Γ) a B ->
   Typing n Γ b A ->
   (* ------------------------------------ *)
-  Typing n Γ (subst_tm (scons b ids) a) B.
+  Typing n Γ (subst_tm (b ..) a) (subst_tm (b ..) B).
 Proof.
   move => h0 h1.
   apply morphing with (Γ := A .: Γ) (n := S n); auto.
   case => *.
-  - by asimpl.
-  - asimpl.
+  - rewrite /dep_ith; by asimpl.
+  - rewrite dep_ith_ren_tm.
+    asimpl.
     hauto lq:on ctrs:Typing solve:lia.
 Qed.
 
-Reserved Notation "a '⤳' b" (at level 80).
-Inductive Red : tm  -> tm  -> Prop :=
-| R_AppAbs (a : tm) (b : tm) :
-  Red (app (lam a) b) (subst_tm (scons b ids) a)
-| R_App (a a' b : tm) :
-  Red a a' ->
-  Red (app a b) (app a' b)
-where "a '⤳' b" := (Red a b).
 
+(* Type soundness *)
 Lemma preservation (a a' : tm) (h : Red a a') :
   forall n Γ A, Typing n Γ a A -> Typing n Γ a' A.
   elim : a a' / h.
@@ -216,22 +233,15 @@ Lemma preservation (a a' : tm) (h : Red a a') :
   - hauto l:on inv:Typing.
 Qed.
 
-Definition is_value (m : tm) : bool :=
-  match m with
-  | unit => true
-  | lam _ => true
-  | _ => false
-  end.
-
-Lemma empty_lam_pi_inv : forall (a : tm) (Γ : context) (A B : ty),
-    Typing 0 Γ a (TPi A B) ->
+Lemma empty_lam_pi_inv : forall (a : tm) (Γ : context) (A B : tm),
+    Typing 0 Γ a (pi A B) ->
     is_value a ->
     exists a0, a = lam a0.
 Proof.
   hauto q:on inv:Typing solve:lia.
 Qed.
 
-Lemma progress (a : tm) (A  :ty) (Γ : context) (h : Typing 0 Γ a A) :
+Lemma progress (a : tm) (A  :tm) (Γ : context) (h : Typing 0 Γ a A) :
   is_value a \/ exists a', a ⤳ a'.
 Proof.
   move : h.
@@ -240,6 +250,7 @@ Proof.
   elim : zero Γ a A / h.
   - lia.
   - sfirstorder.
-  - hauto ctrs:Red l:on use:empty_lam_pi_inv.
   - sfirstorder.
+  - sfirstorder.
+  - hauto ctrs:Red l:on use:empty_lam_pi_inv.
 Qed.
