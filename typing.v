@@ -6,12 +6,14 @@ Require Import stlc.
 From Hammer Require Import Tactics Hammer.
 Require Import Coq.Program.Equality.
 
+
+(* fin n is the set of variables *)
+(* context is indexed by n, which indicates the number of free variables *)
 Definition context (n : nat) := fin n -> ty.
 
 Reserved Notation "Gamma ⊢ a : A" (at level 80, a at level 99).
 
 (* Statics *)
-
 Inductive typing {m : nat} (Γ : context m) : tm m -> ty -> Prop :=
 | T_Var i : Γ ⊢ var_tm i : Γ i
 | T_Lam : forall A a B, A .: Γ ⊢ a : B -> Γ ⊢ lam a : TPi A B
@@ -32,8 +34,31 @@ Lemma renaming
   (* ---------------------------------------- *)
   Δ ⊢ (ren_tm ξ a) : A .
 Proof.
+  (* An easy proof with sauto *)
   elim : n Γ a A / h;
     hauto q:on inv:option,typing ctrs:typing.
+
+  (* Let's try again with manual proofs *)
+  Restart.
+  elim : n Γ a A / h.
+  - move => n Γ x m ξ Δ hΔ /=.
+    by rewrite hΔ.
+  - move => m Γ A a B h_body ih x ξ Δ hΔ /=.
+    apply T_Lam.
+    apply ih.
+    (* Show that the extended ξ is still a proper renaming *)
+    destruct i.
+    (* Some is just Succ *)
+    + rewrite /upRen_tm_tm.  (* Some unnecessary unfolding to see what's going on *)
+      rewrite /up_ren.
+      rewrite /shift.
+      vm_compute.
+      by apply hΔ.
+    + by vm_compute.
+  - move => *.
+    asimpl.
+    apply : T_App; eauto.
+  - simpl; auto.
 Qed.
 
 (* Substitution in Locally-nameless *)
@@ -47,6 +72,37 @@ Lemma morphing
 Proof.
   elim : n Γ a A / h;
     hauto drew:off inv:option,typing ctrs:typing use:renaming.
+
+  Restart.
+  elim : n Γ a A / h.
+  - move => n Γ x m ξ Δ hΔ /=.
+    (* this is surprisingly reminiscent of a logical relation proof *)
+    (* the var case triviall holds because of the assumption baked in *)
+    by firstorder.
+  - move => n Γ A a B h_body ih m ξ Δ hΔ /=.
+    apply T_Lam.
+    apply ih.
+    move => x.
+    destruct x.
+    + simpl.
+      (* >> must be forward composition *)
+      (* I think it's probably opaque, but hammer went through because it doesn't care *)
+      asimpl.
+      (* uparrow/shift can be viewed as weakening on expressions *)
+      (* we know that ξ f is well-typed under Δ  *)
+      (* Let's do one step of weakening to fix it up *)
+      apply renaming with (Γ := Δ).
+      firstorder.
+      (* The proof obligation just wants us to ensure that the
+      variables are mapped to the same type under the new context *)
+      by vm_compute.
+    + simpl.
+      apply T_Var.
+  (* Trivial cases that follow from ih *)
+  - move => * /=.
+    econstructor; eauto.
+  - move => * /=.
+    econstructor.
 Qed.
 
 (* Specialized substitution with nil in Locally-nameless *)
@@ -59,6 +115,20 @@ Lemma subst_one
   Γ ⊢ (subst_tm (scons b ids)) a : B.
 Proof.
   hauto q:on inv:option,typing ctrs:typing use:morphing.
+
+  Restart.
+
+  move => h0 h1.
+  apply morphing with (Γ := A .: Γ).
+  - assumption.
+  (* Define the morphing function *)
+  - destruct i.
+    (* Map var > 0 to themself; trivial proof obligation *)
+    + simpl.
+      apply T_Var.
+    (* Map 0 to b; immediate from the context *)
+    + simpl.
+      assumption.
 Qed.
 
 (* Dynamics *)
@@ -109,3 +179,20 @@ Proof.
   - hauto inv:- ctrs:Red l:on use:empty_lam_pi_inv.
   - sfirstorder.
 Qed.
+
+
+Definition fin_to_nat (n : nat) (x : fin n) : nat.
+  induction n.
+  - inversion x.
+  - destruct x.
+    exact (1 + IHn f).
+    exact 0.
+Defined.
+
+Definition fin2 : fin 4 := (Some (Some None)).
+Definition fin3 : fin 4 := (Some (Some (Some None))).
+
+Compute fin_to_nat fin2.
+Compute fin_to_nat fin3.
+
+Definition dependent_context (n : nat) := forall x:fin n, tm (n - 1 - fin_to_nat x).
