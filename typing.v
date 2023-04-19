@@ -179,13 +179,3 @@ Proof.
   - hauto inv:- ctrs:Red l:on use:empty_lam_pi_inv.
   - sfirstorder.
 Qed.
-
-
-
-Definition fin2 : fin 4 := (Some (Some None)).
-Definition fin3 : fin 4 := (Some (Some (Some None))).
-
-Compute fin_to_nat fin2.
-Compute fin_to_nat fin3.
-
-Definition dependent_context (n : nat) := forall x:fin n, tm (n - 1 - fin_to_nat x).
