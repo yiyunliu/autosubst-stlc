@@ -335,11 +335,9 @@ Proof.
   move : h.
   move eq0 : 0 => zero h.
   move : eq0.
-  elim : zero Γ a A / h.
+  elim : zero Γ a A / h; eauto 3.
+  (* var *)
   - lia.
-  - sfirstorder.
-  - sfirstorder.
-  - sfirstorder.
+  (* app *)
   - hauto ctrs:Red l:on use:empty_lam_pi_inv.
-  - sfirstorder.
 Qed.
