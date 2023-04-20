@@ -26,6 +26,52 @@ Definition is_value (m : tm) : bool :=
   | _ => false
   end.
 
+Reserved Notation "a '≡' b" (at level 70).
+Inductive DefEq : tm -> tm -> Prop :=
+| E_Var x :
+  (* -- *)
+  x ≡ x
+
+| E_Sym a b :
+  a ≡ b ->
+  (* ------- *)
+  b ≡ a
+
+| E_Trans a b c :
+  a ≡ b ->
+  b ≡ c ->
+  (* ---- *)
+  a ≡ c
+
+| E_App a0 a1 b0 b1 :
+  a0 ≡ a1 ->
+  b0 ≡ b1 ->
+  (* --------- *)
+  app a0 b0 ≡ app a1 b1
+
+| E_Abs a0 a1 :
+  a0 ≡ a1 ->
+  (* --------- *)
+  lam a0 ≡ lam a1
+
+| E_AppAbs a0 a1 b0 b1 c:
+  (* makes ih easier to apply *)
+  c = (subst_tm (b1..) a1) ->
+  a0 ≡ lam a1 ->
+  b0 ≡ b1 ->
+  (* ------------------------------ *)
+  app a0 b1 ≡ c
+
+where "a '≡' b" := (DefEq a b).
+
+#[export]Hint Constructors DefEq : core.
+
+Lemma E_Refl a : a ≡ a.
+Proof.
+  induction a; sfirstorder. Qed.
+
+#[export]Hint Resolve E_Refl : core.
+
 (* Statics *)
 (* context is not indexed because we are using the unscoped version *)
 Definition context := nat -> tm.
@@ -74,9 +120,42 @@ Inductive Typing (m : nat) (Γ : context) : tm -> tm -> Prop :=
     Typing m Γ a (pi A B) ->
     Typing m Γ b A ->
     (* ----------------------------- *)
-    Typing m Γ (app a b) (subst_tm (scons b ids) B).
+    Typing m Γ (app a b) (subst_tm (scons b ids) B)
+
+| T_Conv : forall a A B s,
+    Typing m Γ a A ->
+    Typing m Γ B (type s) ->
+    A ≡ B ->
+    (* -------------------- *)
+    Typing m Γ a B.
 
 #[export]Hint Constructors Typing : core.
+
+Lemma defeq_renaming ξ A B (h : A ≡ B):
+  ren_tm ξ A ≡ ren_tm ξ B.
+  move : ξ.
+  elim : A B / h; eauto 3.
+  - sfirstorder.
+  - sfirstorder.
+  - move => a0 a1 b0 b1 c h h0 ih0 h1 ih1 ξ /=.
+    apply : E_AppAbs; eauto.
+    rewrite h; by asimpl.
+    (* replace (ren_tm ξ (subst_tm (b1..) a1)) with *)
+    (*   (subst_tm ((ren_tm ξ b1)..) (ren_tm (upRen_tm_tm ξ) a1)); last by asimpl. *)
+    (* sfirstorder. *)
+Qed.
+
+Lemma defeq_subst ξ A B (h : A ≡ B):
+  subst_tm ξ A ≡ subst_tm ξ B.
+  move : ξ.
+  elim : A B / h; eauto 3.
+  - sfirstorder.
+  - sfirstorder.
+  - (* move => a0 a1 b0 b1 c h h0 ih0 h1 ih1 ξ /=. *)
+    move => *.
+    apply : E_AppAbs; eauto.
+    by subst; asimpl.
+Qed.
 
 Lemma renaming
   (n : nat) (Γ : context) (a : tm)
@@ -125,6 +204,10 @@ Proof.
       ( (subst_tm (scons (ren_tm ξ b) ids) (ren_tm (upRen_tm_tm ξ) B)));
       last by asimpl.
     apply T_App with (A := ren_tm ξ A); eauto.
+  - hauto q:on ctrs:Typing use:defeq_renaming.
+    (* move => n Γ a A B s h0 ih0 h1 ih1 h2 m ξ Δ hΔ. *)
+    (* apply T_Conv with (A := ren_tm ξ A) (s := s); eauto. *)
+    (* by apply :defeq_renaming. *)
 Qed.
 
 Lemma morphing
@@ -205,6 +288,7 @@ Proof.
     (* simpl. *)
     (* asimpl. *)
     (* reflexivity. *)
+  - hauto q:on ctrs:Typing use:defeq_subst.
 Qed.
 
 Lemma subst_one
@@ -224,22 +308,26 @@ Proof.
     hauto lq:on ctrs:Typing solve:lia.
 Qed.
 
+(* TODO: inversion lemmas *)
+(* Typing n Γ (app a b) A *)
 
 (* Type soundness *)
 Lemma preservation (a a' : tm) (h : Red a a') :
   forall n Γ A, Typing n Γ a A -> Typing n Γ a' A.
   elim : a a' / h.
-  - hauto lq:on use:subst_one inv:Typing.
-  - hauto l:on inv:Typing.
-Qed.
+  - admit. (* hauto lq:on use:subst_one inv:Typing. *)
+  - admit. (* hauto l:on inv:Typing. *)
+Admitted.
 
+(* Need par proof *)
 Lemma empty_lam_pi_inv : forall (a : tm) (Γ : context) (A B : tm),
     Typing 0 Γ a (pi A B) ->
     is_value a ->
     exists a0, a = lam a0.
 Proof.
-  hauto q:on inv:Typing solve:lia.
-Qed.
+(*   hauto q:on inv:Typing solve:lia. *)
+  (* Qed. *)
+Admitted.
 
 Lemma progress (a : tm) (A  :tm) (Γ : context) (h : Typing 0 Γ a A) :
   is_value a \/ exists a', a ⤳ a'.
@@ -253,4 +341,5 @@ Proof.
   - sfirstorder.
   - sfirstorder.
   - hauto ctrs:Red l:on use:empty_lam_pi_inv.
+  - sfirstorder.
 Qed.
