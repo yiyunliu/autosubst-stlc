@@ -308,15 +308,51 @@ Proof.
     hauto lq:on ctrs:Typing solve:lia.
 Qed.
 
-(* TODO: inversion lemmas *)
-(* Typing n Γ (app a b) A *)
+Lemma app_inv n Γ (a b T : tm)
+  (h : Typing n Γ (app a b) T) :
+  exists A B,
+    Typing n Γ a (pi A B) /\
+    Typing n Γ b A /\
+    ((subst_tm (b..) B ≡ T /\ exists s, Typing n Γ T (type s))
+     \/ subst_tm (b..) B = T).
+Proof.
+  move eqn : (app a b) h => t h.
+  move : a b eqn.
+  elim : n Γ t T / h; try congruence.
+  - hauto l:on ctrs:Typing.
+  - hauto l:on.
+Qed.
 
-(* Type soundness *)
+Lemma abs_inv n Γ (a T : tm)
+  (h : Typing n Γ (lam a) T) :
+  exists A B,
+    Typing (S n) (A .: Γ) a B /\
+    ((pi A B ≡ T /\ exists s, Typing n Γ T (type s))
+     \/ pi A B = T).
+Proof.
+  move eqn : (lam a) h => t h.
+  move : a eqn.
+  elim : n Γ t T / h; try congruence.
+  - hauto lq:on ctrs:Typing.
+  (* DO *NOT* USE ctrs: in this case *)
+  - hauto l:on.
+Qed.
+
 Lemma preservation (a a' : tm) (h : Red a a') :
   forall n Γ A, Typing n Γ a A -> Typing n Γ a' A.
   elim : a a' / h.
-  - admit. (* hauto lq:on use:subst_one inv:Typing. *)
-  - admit. (* hauto l:on inv:Typing. *)
+  - move => a b n Γ A /app_inv.
+    move => [A0 [B h0]].
+    case : h0.
+    move /abs_inv => [A1 [B0 [? h2]]].
+    case : h2.
+    + move => [h2 [s h4]] [h5 h6].
+      case : h6 => [[h6 [s0 h7]] | h6].
+      * admit.
+      * admit.
+    + hauto lq:on ctrs:Typing use:subst_one.
+  - move => a a' b h0 ih0 n Γ A /app_inv.
+    hauto q:on ctrs:Typing.
 Admitted.
 
 (* Need par proof *)
