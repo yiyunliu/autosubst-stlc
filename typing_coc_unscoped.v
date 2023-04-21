@@ -18,6 +18,9 @@ Inductive Red : tm  -> tm  -> Prop :=
   Red (app a b) (app a' b)
 where "a '⤳' b" := (Red a b).
 
+Definition Reds := clos_trans_1n _ Red.
+Notation "a '⤳*' b" := (Reds a b) (at level 80).
+
 Definition is_value (m : tm) : bool :=
   match m with
   | lam _ => true
@@ -923,4 +926,17 @@ Proof.
   - lia.
   (* app *)
   - hauto ctrs:Red l:on use:empty_lam_pi_inv.
+Qed.
+
+Definition stuck a : Prop :=
+  (~ exists a', a ⤳ a') /\ ~ is_value a.
+
+Theorem type_soundness a (Γ : context) a' T
+    (h0 : Typing 0 Γ a T)
+    (h1 : a ⤳* a') :
+    (* ------------------ *)
+    ~(stuck a').
+Proof.
+  move : Γ T h0.
+  elim : a a' / h1; hauto l:on use:preservation, progress.
 Qed.
