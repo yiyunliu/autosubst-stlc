@@ -4,7 +4,7 @@ Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 Require Import coc_unscoped.
 From Hammer Require Import Tactics Hammer.
-From Coq Require Import micromega.Lia.
+From Coq Require Import micromega.Lia Relation_Operators Operators_Properties.
 
 Require Import Coq.Program.Equality.
 
@@ -240,6 +240,16 @@ Proof.
     by subst; asimpl.
 Qed.
 
+Lemma par_cong A B C D
+  (h : A ⇒ B)
+  (h0 : C ⇒ D) :
+  (* ------------------ *)
+  subst_tm (C..) A ⇒ subst_tm (D..) B.
+Proof.
+  apply par_morphing; sauto lq:on.
+Qed.
+
+
 Lemma par_confluence A B C
   (h : A ⇒ B)
   (h0 : A ⇒ C) :
@@ -249,12 +259,247 @@ Proof.
   move :  C h0.
   elim : A B  / h.
   - hauto lq:on inv:Par ctrs:Par.
-  - admit.
+  - move => a0 a1 b0 b1 h0 ih0 h1 ih1 C h2.
+    case E : (app a0 b0) C / h2; try congruence.
+    (* App App *)
+    + hauto lq:on inv:Par ctrs:Par.
+    (* App Abs *)
+    + hauto lq:on ctrs:Par inv:Par use:par_cong.
   - hauto lq:on inv:Par ctrs:Par.
   - hauto lq:on inv:Par ctrs:Par.
   - hauto lq:on inv:Par ctrs:Par.
-  - admit.
-Admitted.
+  - move => a0 a1 b0 b1 ? ? h0 ih0 h1 ih1 C h2; subst.
+    case E : (app a0 b0) C / h2; try congruence.
+    (* App Abs *)
+    + hauto lq:on ctrs:Par inv:Par use:par_cong.
+    (* Abs Abs *)
+    + qauto l:on ctrs:Par inv:Par use:par_cong.
+Qed.
+
+Definition Multipar := clos_trans_1n _ Par.
+#[export]Hint Unfold Multipar : core.
+Notation "a '⇒*' b" := (Multipar a b) (at level 70).
+
+Lemma multipar_trans A B C
+  (h : A ⇒* B)
+  (h0 : B ⇒* C) :
+  (* ----------- *)
+  A ⇒* C.
+Proof. sauto lq:on use:clos_trans_t1n_iff. Qed.
+
+
+Lemma multipar_par_confluence A B C
+  (h : A ⇒* B)
+  (h0 : A ⇒ C) :
+  (* ---------- *)
+  exists D, B ⇒* D /\ C ⇒* D.
+Proof.
+  move : C h0.
+  elim : A B /h.
+  - move=> x y H C h0.
+    have [D ?] : exists D, y ⇒ D /\ C ⇒ D by sfirstorder use:par_confluence.
+    hauto q:on ctrs:clos_trans_1n.
+  - move=> x y z h h0 h1 C h2.
+    have [D ?] : exists D, y ⇒ D /\ C ⇒ D by sfirstorder use:par_confluence.
+    hauto lq:on ctrs:clos_trans_1n.
+Qed.
+
+Lemma multipar_confluence A B C
+  (h : A ⇒* B)
+  (h0 : A ⇒* C) :
+  (* ---------- *)
+  exists D, B ⇒* D /\ C ⇒* D.
+Proof.
+  move : C h0.
+  elim : A B /h.
+  - hauto lq:on use:multipar_par_confluence.
+  - move=> x y z h h0 h1 C h2.
+    have [D [*]] : exists D, y ⇒* D /\ C ⇒* D by hauto lq:on use:multipar_par_confluence.
+    have [E [*]] : exists E, D ⇒* E /\ z ⇒* E by hauto lq:on use:multipar_par_confluence.
+    sfirstorder use:multipar_trans.
+Qed.
+
+Definition Join A B := exists C, A ⇒* C /\ B ⇒* C.
+Notation "a '⇔' b" := (Join a b) (at level 79).
+#[export]Hint Unfold Join : core.
+
+Lemma join_trans A B C
+  (h0 : A ⇔ B)
+  (h1 : B ⇔ C) :
+  (* --- *)
+  A ⇔ C.
+Proof.
+  rewrite /Join in h0 h1 *.
+  case : h0 => C0 [*].
+  case : h1 => C1 [*].
+  have [D [*]] : exists D, C0 ⇒* D /\ C1 ⇒* D by sfirstorder use:multipar_confluence.
+  exists D. sfirstorder use:multipar_trans.
+Qed.
+
+Lemma par_refl A : Par A A.
+Proof. elim : A; sfirstorder. Qed.
+
+Lemma multipar_refl A : Multipar A A.
+Proof. hauto l:on use:par_refl. Qed.
+
+Lemma join_sym A B
+  (h0 : A ⇔ B) :
+  (* --------- *)
+  B ⇔ A.
+Proof. sfirstorder unfold:Join. Qed.
+
+Lemma join_refl A:
+  A ⇔ A.
+Proof. sfirstorder use:multipar_refl. Qed.
+
+Lemma par_implies_defeq A B
+  (h0 : A ⇒ B) :
+  (* -------- *)
+  A ≡ B.
+Proof. elim : A B / h0; sfirstorder. Qed.
+
+Lemma multipar_implies_defeq A B
+  (h0 : A ⇒* B) :
+  (* -------- *)
+  A ≡ B.
+Proof.
+  elim : A B /h0;
+    sfirstorder use:par_implies_defeq.
+Qed.
+
+Lemma join_implies_defeq A B
+  (h0 : A ⇔ B) :
+  (* -------- *)
+  A ≡ B.
+Proof.
+  hauto q:on ctrs:DefEq use:multipar_implies_defeq.
+Qed.
+
+Lemma multipar_par_app_intro A0 B0 A1 B1
+  (h0 : A0 ⇒* B0)
+  (h1 : A1 ⇒ B1) :
+  (* ----------- *)
+  app A0 A1 ⇒* app B0 B1.
+Proof.
+  move : A1 B1 h1.
+  elim : A0 B0 / h0.
+  - hauto l:on ctrs:clos_trans_1n.
+  - move=> ? B ? ? ? ? A1 B1 h2.
+    apply Relation_Operators.t1n_trans with (y := app B B1); auto.
+    sfirstorder use:par_refl.
+Qed.
+
+Lemma multipar_app_intro A0 B0 A1 B1
+  (h0 : A0 ⇒* B0)
+  (h1 : A1 ⇒* B1) :
+  (* ------------ *)
+  app A0 A1 ⇒* app B0 B1.
+Proof.
+  move : A0 B0 h0.
+  elim : A1 B1 / h1.
+  - sfirstorder use:multipar_par_app_intro.
+  - hauto lq:on use:multipar_trans, multipar_par_app_intro, multipar_refl.
+Qed.
+
+Lemma join_app_intro  A0 B0 A1 B1
+  (h0 : A0 ⇔ B0)
+  (h1 : A1 ⇔ B1) :
+  (* ------------ *)
+  app A0 A1 ⇔ app B0 B1.
+Proof.
+  hauto q:on use:multipar_app_intro.
+Qed.
+
+Lemma multipar_abs_intro A B
+  (h0 : A ⇒* B) :
+  (* --------- *)
+  lam A ⇒* lam B.
+Proof.
+  elim : A B / h0; hauto lq:on inv:Par ctrs:clos_trans_1n, Par.
+Qed.
+
+Lemma join_abs_intro A B
+  (h0 : A ⇔ B) :
+  (* --------- *)
+  lam A ⇔ lam B.
+Proof.
+  hauto q:on use:multipar_abs_intro.
+Qed.
+
+Lemma multipar_join A B
+  (h0 : A ⇒* B) :
+  (* ----------- *)
+  A ⇔ B.
+Proof.
+  sfirstorder use:multipar_refl.
+Qed.
+
+Lemma par_join A B
+  (h0 : A ⇒ B) :
+  (* ----------- *)
+  A ⇔ B.
+Proof.
+  hauto lq:on ctrs:clos_trans_1n use:multipar_join.
+Qed.
+
+Lemma multipar_par_pi_intro A0 B0 A1 B1
+  (h0 : A0 ⇒* B0)
+  (h1 : A1 ⇒ B1) :
+  (* ------------ *)
+  pi A0 A1 ⇒* pi B0 B1.
+Proof.
+  move : A1 B1 h1.
+  elim : A0 B0 / h0.
+  - hauto lq:on ctrs:clos_trans_1n, Par.
+  - move=> ? B ? ? ? ? A1 B1 h2.
+    apply Relation_Operators.t1n_trans with (y := pi B B1); auto.
+    sfirstorder use:par_refl.
+Qed.
+
+Lemma multipar_pi_intro A0 B0 A1 B1
+  (h0 : A0 ⇒* B0)
+  (h1 : A1 ⇒* B1) :
+  (* ------------ *)
+  pi A0 A1 ⇒* pi B0 B1.
+Proof.
+    move : A0 B0 h0.
+  elim : A1 B1 / h1.
+  - sfirstorder use:multipar_par_pi_intro.
+  - hauto lq:on use:multipar_trans, multipar_par_pi_intro, multipar_refl.
+Qed.
+
+Lemma join_pi_intro A0 B0 A1 B1
+  (h0 : A0 ⇔ B0)
+  (h1 : A1 ⇔ B1) :
+  (* ------------ *)
+  pi A0 A1 ⇔ pi B0 B1.
+Proof.
+  hauto q:on use:multipar_pi_intro.
+Qed.
+
+Lemma defeq_implies_join A B
+  (h0 : A ≡ B) :
+  (* --------- *)
+  A ⇔ B.
+Proof.
+  elim : A B /h0.
+  - hauto l:on.
+  - strivial use:join_sym.
+  - hauto l:on use:join_trans.
+  - hauto l:on use:join_app_intro.
+  - hauto lq:on use:join_abs_intro.
+  - hauto l:on use:join_pi_intro.
+  - hauto l:on.
+  - move=> a0 a1 b0 b1 ? ? _ ih0 _ ih1; subst.
+    apply join_trans with (B := app (lam a1) b1); first by hauto l:on use:join_app_intro.
+    have : app (lam a1) b1 ⇒ subst_tm (b1..) a1 by sfirstorder use:par_refl.
+    sfirstorder use:par_join.
+Qed.
+
+Lemma defeq_join_iff A B : A ≡ B <-> A ⇔ B.
+Proof.
+  firstorder using join_implies_defeq, defeq_implies_join.
+Qed.
 
 Lemma renaming
   (n : nat) (Γ : context) (a : tm)
