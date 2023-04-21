@@ -501,6 +501,39 @@ Proof.
   firstorder using join_implies_defeq, defeq_implies_join.
 Qed.
 
+Lemma par_proj A0 B0 A1 B1
+  (h0 : pi A0 A1 ⇒ pi B0 B1) :
+  A0 ⇒ B0 /\ A1 ⇒ B1.
+Proof. hauto lq:on inv:Par. Qed.
+
+Lemma multipar_proj A0 B0 A1 B1
+  (h0 : pi A0 A1 ⇒* pi B0 B1) :
+  A0 ⇒* B0 /\ A1 ⇒* B1.
+Proof.
+  move E0: (pi A0 A1) h0 => A.
+  move E1: (pi B0 B1) => B h.
+  move : A0 A1 B0 B1 E0 E1.
+  elim : A B / h; sblast use:par_proj.
+Qed.
+
+Lemma multipar_pi_inv A0 A1 C
+  (h0 : pi A0 A1 ⇒* C) :
+  exists B0 B1, pi A0 A1 ⇒* pi B0 B1 /\ C = pi B0 B1.
+Proof.
+  move E : (pi A0 A1) h0 => A h.
+  move : A0 A1 E.
+  elim : A C / h.
+  - hauto lq:on rew:off inv:Par ctrs:clos_trans_1n.
+  - hauto lq:on rew:off inv:Par ctrs:clos_trans_1n.
+Qed.
+
+Lemma join_pi_proj A0 B0 A1 B1
+  (h0 : pi A0 A1 ⇔ pi B0 B1) :
+  A0 ⇔ B0 /\ A1 ⇔ B1.
+Proof.
+  qauto use:multipar_proj, multipar_pi_inv.
+Qed.
+
 Lemma renaming
   (n : nat) (Γ : context) (a : tm)
   (A : tm) (h : Typing n Γ a A)   :
