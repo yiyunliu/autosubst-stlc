@@ -757,7 +757,9 @@ Lemma abs_inv n Γ (a T : tm)
   (h : Typing n Γ (lam a) T) :
   exists A B,
     Typing (S n) (A .: Γ) a B /\
-    ((pi A B ≡ T /\ exists s, Typing n Γ T (type s))
+    (exists s, Typing n Γ (pi A B) (type s)) /\
+    (exists s, Typing n Γ T (type s)) /\
+    ((pi A B ≡ T )
      \/ pi A B = T).
 Proof.
   move eqn : (lam a) h => t h.
@@ -768,28 +770,48 @@ Proof.
   - hauto l:on.
 Qed.
 
+Lemma pi_inv n Γ A B T
+  (h : Typing n Γ (pi A B) T) :
+  (* --------------------- *)
+  (exists s, Typing n Γ A (type s)) /\
+    (exists s, Typing (S n) (A .: Γ) B (type s)).
+Proof.
+  move eq : (pi A B) h => A0 h.
+  move : A B eq.
+  elim : n Γ A0 T / h; try congruence.
+  - qauto l:on inv:Typing.
+  - sfirstorder inv:Typing.
+Qed.
+
 Lemma preservation (a a' : tm) (h : Red a a') :
   forall n Γ A, Typing n Γ a A -> Typing n Γ a' A.
   elim : a a' / h.
   - move => a b n Γ A /app_inv.
     move => [A0 [B h0]].
     case : h0.
-    move /abs_inv => [A1 [B0 [? h2]]].
+    move /abs_inv => [A1 [B0 [? [[s1 h0] [[s4 hp] h2]]]]] h6.
+    move /pi_inv : h0 => [[? ?] [? ?]].
+    move /pi_inv : hp => [[? ?] [s8 ?]].
     case : h2.
-    + move => [h2 [s h4]] [h5 h6].
-      case : h6 => [[h6 [s0 h7]] | h6].
-      * apply T_Conv with (A := subst_tm (b..) B) (s := s0); try assumption.
-        (* pisnd *)
-        (* also need to strengthen lam_inv to show that the pi type is
-        well-formed *)
-        admit.
+    + move : h6 => [h6 h7].
+      case : h7 => [[h7 [s ?]] h8 | ? ?].
+      * apply T_Conv with (A := subst_tm (b..) B0) (s := s); try assumption.
+        apply subst_one with (A := A1); eauto.
+        eapply T_Conv with (A := A0); eauto.
+        qauto l:on use:E_PiFst, E_Sym.
+        have  : (subst_tm (b..) B0) ≡ (subst_tm (b..) B) by sfirstorder use:E_Refl, E_PiSnd.
+        hauto l:on use:E_Sym, E_Trans.
       * subst.
-        (* same here *)
-admit.
+        apply T_Conv with (A := subst_tm (b..) B0) (s := s8); try assumption.
+        apply subst_one with (A := A1); eauto.
+        hauto lq:on use:E_PiFst, E_Sym ctrs:Typing.
+        replace (type s8) with (subst_tm (b..) (type s8)); last reflexivity.
+        apply subst_one with (A := A0); eauto.
+        sfirstorder use:E_Refl, E_PiSnd.
     + hauto lq:on ctrs:Typing use:subst_one.
   - move => a a' b h0 ih0 n Γ A /app_inv.
     hauto q:on ctrs:Typing.
-Admitted.
+Qed.
 
 (* Need par proof *)
 Lemma empty_lam_pi_inv : forall (a : tm) (Γ : context) (A B : tm),
