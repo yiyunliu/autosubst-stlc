@@ -30,7 +30,7 @@ Reserved Notation "a '≡' b" (at level 70).
 Inductive DefEq : tm -> tm -> Prop :=
 | E_Var x :
   (* -- *)
-  x ≡ x
+  var_tm x ≡ var_tm x
 
 | E_Sym a b :
   a ≡ b ->
@@ -54,13 +54,23 @@ Inductive DefEq : tm -> tm -> Prop :=
   (* --------- *)
   lam a0 ≡ lam a1
 
+| E_Pi a0 a1 b0 b1 :
+  a0 ≡ b0 ->
+  a1 ≡ b1 ->
+  (* --------- *)
+  pi a0 a1 ≡ pi b0 b1
+
+| E_Type s  :
+  (* --------- *)
+  type s ≡ type s
+
 | E_AppAbs a0 a1 b0 b1 c:
   (* makes ih easier to apply *)
   c = (subst_tm (b1..) a1) ->
   a0 ≡ lam a1 ->
   b0 ≡ b1 ->
   (* ------------------------------ *)
-  app a0 b1 ≡ c
+  app a0 b0 ≡ c
 
 where "a '≡' b" := (DefEq a b).
 
@@ -68,9 +78,49 @@ where "a '≡' b" := (DefEq a b).
 
 Lemma E_Refl a : a ≡ a.
 Proof.
-  induction a; sfirstorder. Qed.
+  induction a; auto. Qed.
 
 #[export]Hint Resolve E_Refl : core.
+
+
+Reserved Notation "a '⇒' b" (at level 70).
+Inductive Par : tm -> tm -> Prop :=
+| P_Var x :
+  (* -- *)
+  var_tm x ⇒ var_tm x
+
+| P_App a0 a1 b0 b1 :
+  a0 ⇒ a1 ->
+  b0 ⇒ b1 ->
+  (* --------- *)
+  app a0 b0 ⇒ app a1 b1
+
+| P_Abs a0 a1 :
+  a0 ⇒ a1 ->
+  (* --------- *)
+  lam a0 ⇒ lam a1
+
+| P_Pi a0 a1 b0 b1 :
+  a0 ⇒ b0 ->
+  a1 ⇒ b1 ->
+  (* --------- *)
+  pi a0 a1 ⇒ pi b0 b1
+
+| P_Type s  :
+  (* --------- *)
+  type s ⇒ type s
+
+| P_AppAbs a0 a1 b0 b1 c:
+  (* makes ih easier to apply *)
+  c = (subst_tm (b1..) a1) ->
+  a0 ⇒ lam a1 ->
+  b0 ⇒ b1 ->
+  (* ------------------------------ *)
+  app a0 b0 ⇒ c
+
+where "a '⇒' b" := (Par a b).
+
+#[export]Hint Constructors Par : core.
 
 (* Statics *)
 (* context is not indexed because we are using the unscoped version *)
@@ -137,12 +187,10 @@ Lemma defeq_renaming ξ A B (h : A ≡ B):
   elim : A B / h; eauto 3.
   - sfirstorder.
   - sfirstorder.
+  - sfirstorder.
   - move => a0 a1 b0 b1 c h h0 ih0 h1 ih1 ξ /=.
     apply : E_AppAbs; eauto.
     rewrite h; by asimpl.
-    (* replace (ren_tm ξ (subst_tm (b1..) a1)) with *)
-    (*   (subst_tm ((ren_tm ξ b1)..) (ren_tm (upRen_tm_tm ξ) a1)); last by asimpl. *)
-    (* sfirstorder. *)
 Qed.
 
 Lemma defeq_subst ξ A B (h : A ≡ B):
@@ -151,11 +199,62 @@ Lemma defeq_subst ξ A B (h : A ≡ B):
   elim : A B / h; eauto 3.
   - sfirstorder.
   - sfirstorder.
-  - (* move => a0 a1 b0 b1 c h h0 ih0 h1 ih1 ξ /=. *)
-    move => *.
+  - sfirstorder.
+  - move => *.
     apply : E_AppAbs; eauto.
     by subst; asimpl.
 Qed.
+
+Lemma par_renaming ξ A B (h : A ⇒ B):
+  ren_tm ξ A ⇒ ren_tm ξ B.
+  move : ξ.
+  elim : A B / h; eauto 3.
+  - sfirstorder.
+  - sfirstorder.
+  - sfirstorder.
+  - sfirstorder.
+  - sfirstorder.
+  - move => a0 a1 b0 b1 c h h0 ih0 h1 ih1 ξ /=.
+    apply : P_AppAbs; eauto.
+    rewrite h; by asimpl.
+Qed.
+
+Lemma par_morphing ξ0 ξ1 A B (h : A ⇒ B) :
+  (forall i, ξ0 i ⇒ ξ1 i) ->
+  subst_tm ξ0 A ⇒ subst_tm ξ1 B.
+Proof.
+  move : ξ0 ξ1.
+  elim : A B / h => /= //; eauto 3.
+  - sfirstorder.
+  - move => ? ? ? ih0 * /=.
+    constructor.
+    apply ih0.
+    hauto l:on inv:nat ctrs:Par use:par_renaming.
+  - move => ? ? ? ? ? ? ? ih * /=.
+    constructor; eauto.
+    apply ih.
+    hauto l:on inv:nat ctrs:Par use:par_renaming.
+  - move => a0 a1 b0 b1 c ? h1 ih1 h2 ih2 ξ0 ξ1 hξ.
+    move /(_ ξ0 ξ1 hξ) : ih1 => ih1.
+    apply : P_AppAbs; eauto.
+    by subst; asimpl.
+Qed.
+
+Lemma par_confluence A B C
+  (h : A ⇒ B)
+  (h0 : A ⇒ C) :
+  (* --------------- *)
+  exists D, B ⇒ D /\ C ⇒ D.
+Proof.
+  move :  C h0.
+  elim : A B  / h.
+  - hauto lq:on inv:Par ctrs:Par.
+  - admit.
+  - hauto lq:on inv:Par ctrs:Par.
+  - hauto lq:on inv:Par ctrs:Par.
+  - hauto lq:on inv:Par ctrs:Par.
+  - admit.
+Admitted.
 
 Lemma renaming
   (n : nat) (Γ : context) (a : tm)
@@ -348,8 +447,14 @@ Lemma preservation (a a' : tm) (h : Red a a') :
     case : h2.
     + move => [h2 [s h4]] [h5 h6].
       case : h6 => [[h6 [s0 h7]] | h6].
-      * admit.
-      * admit.
+      * apply T_Conv with (A := subst_tm (b..) B) (s := s0); try assumption.
+        (* pisnd *)
+        (* also need to strengthen lam_inv to show that the pi type is
+        well-formed *)
+        admit.
+      * subst.
+        (* same here *)
+admit.
     + hauto lq:on ctrs:Typing use:subst_one.
   - move => a a' b h0 ih0 n Γ A /app_inv.
     hauto q:on ctrs:Typing.
