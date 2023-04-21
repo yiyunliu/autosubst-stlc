@@ -534,6 +534,59 @@ Proof.
   qauto use:multipar_proj, multipar_pi_inv.
 Qed.
 
+Lemma multipar_par_cong A B C D
+  (h : A ⇒* B)
+  (h0 : C ⇒ D) :
+  (* ------------------ *)
+  subst_tm (C..) A ⇒* subst_tm (D..) B.
+Proof.
+  move : C D h0.
+  elim : A B / h.
+  - hauto l:on use:par_cong.
+  - move=> x y z h h0 h1 C D h2.
+    apply Relation_Operators.t1n_trans with (y := subst_tm (D..) y); auto;
+      first sfirstorder use:par_cong.
+    sfirstorder use:par_refl.
+Qed.
+
+Lemma multipar_cong A B C D
+  (h : A ⇒* B)
+  (h0 : C ⇒* D) :
+  (* ------------------ *)
+  subst_tm (C..) A ⇒* subst_tm (D..) B.
+Proof.
+  move : A B h.
+  elim : C D / h0.
+  - sfirstorder use:multipar_par_cong.
+  - hauto lq:on use:multipar_trans, multipar_par_cong, multipar_refl.
+Qed.
+
+Lemma join_cong A B C D
+  (h : A ⇔ B)
+  (h0 : C ⇔ D) :
+  (* ------------------ *)
+  subst_tm (C..) A ⇔ subst_tm (D..) B.
+Proof.
+  rewrite /Join in h h0 *.
+  move : h => [C0 [*]].
+  move : h0 => [C1 [*]].
+  exists (subst_tm (C1..) C0).
+  sfirstorder use:multipar_cong.
+Qed.
+
+Lemma E_PiFst A0 B0 A1 B1
+  (h0 : pi A0 A1 ≡ pi B0 B1) :
+  A0 ≡ B0.
+Proof. hauto lq:on use:defeq_join_iff, join_pi_proj. Qed.
+
+Lemma E_PiSnd A0 B0 A1 B1 a b
+  (h0 : pi A0 A1 ≡ pi B0 B1)
+  (h1 : a ≡ b) :
+(* --------------------------- *)
+  subst_tm (a..) A1 ≡ subst_tm (b..) B1.
+Proof.
+  qauto l:on use:defeq_join_iff, join_pi_proj, join_cong. Qed.
+
 Lemma renaming
   (n : nat) (Γ : context) (a : tm)
   (A : tm) (h : Typing n Γ a A)   :
