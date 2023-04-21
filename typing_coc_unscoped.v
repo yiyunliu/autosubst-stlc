@@ -260,7 +260,7 @@ Proof.
   elim : A B  / h.
   - hauto lq:on inv:Par ctrs:Par.
   - move => a0 a1 b0 b1 h0 ih0 h1 ih1 C h2.
-    case E : (app a0 b0) C / h2; try congruence.
+    case E : (app a0 b0) C / h2; try by[].
     (* App App *)
     + hauto lq:on inv:Par ctrs:Par.
     (* App Abs *)
@@ -269,7 +269,7 @@ Proof.
   - hauto lq:on inv:Par ctrs:Par.
   - hauto lq:on inv:Par ctrs:Par.
   - move => a0 a1 b0 b1 ? ? h0 ih0 h1 ih1 C h2; subst.
-    case E : (app a0 b0) C / h2; try congruence.
+    case E : (app a0 b0) C / h2; try by[].
     (* App Abs *)
     + hauto lq:on ctrs:Par inv:Par use:par_cong.
     (* Abs Abs *)
@@ -587,6 +587,67 @@ Lemma E_PiSnd A0 B0 A1 B1 a b
 Proof.
   qauto l:on use:defeq_join_iff, join_pi_proj, join_cong. Qed.
 
+Inductive tm_head : Set :=
+| H_Pi : tm_head
+| H_Lam : tm_head
+| H_Sort : tm_head.
+
+Definition tm_to_head (t : tm) : option tm_head :=
+  match t with
+  | pi _ _ => Datatypes.Some H_Pi
+  | lam _ => Datatypes.Some H_Lam
+  | type _ => Datatypes.Some H_Sort
+  | _ => Datatypes.None
+  end.
+
+Compute match (Datatypes.Some 1) with
+        | Datatypes.Some _ => 0
+        | _ => 1
+        end.
+
+Definition consistent a b :=
+  match tm_to_head a with
+  | Datatypes.Some h1 =>
+      match tm_to_head b with
+      | Datatypes.Some h2 =>
+          h1 = h2
+      | _ => True
+      end
+  | _ => True
+  end.
+Lemma par_headform_preservation :
+  forall A B, A ⇒ B ->
+       forall h, Datatypes.Some h = tm_to_head A -> Datatypes.Some h = tm_to_head B.
+Proof.
+  induction 1;
+    hauto depth:1.
+Qed.
+
+Lemma multipar_headform_preservation :
+  forall A B, A ⇒* B ->
+       forall h, Datatypes.Some h = tm_to_head A -> Datatypes.Some h = tm_to_head B.
+Proof.
+  induction 1;
+    sfirstorder use:par_headform_preservation.
+Qed.
+
+
+Lemma join_consistent :
+  forall A B, A ⇔ B ->
+       consistent A B.
+Proof.
+  rewrite /consistent.
+  sblast use:multipar_headform_preservation.
+Qed.
+
+Lemma defeq_consistent :
+  forall A B, A ≡ B ->
+       consistent A B.
+Proof.
+  qauto l:on use:defeq_join_iff, join_consistent.
+Qed.
+
+
 Lemma renaming
   (n : nat) (Γ : context) (a : tm)
   (A : tm) (h : Typing n Γ a A)   :
@@ -748,7 +809,7 @@ Lemma app_inv n Γ (a b T : tm)
 Proof.
   move eqn : (app a b) h => t h.
   move : a b eqn.
-  elim : n Γ t T / h; try congruence.
+  elim : n Γ t T / h; try by [].
   - hauto l:on ctrs:Typing.
   - hauto l:on.
 Qed.
@@ -764,7 +825,7 @@ Lemma abs_inv n Γ (a T : tm)
 Proof.
   move eqn : (lam a) h => t h.
   move : a eqn.
-  elim : n Γ t T / h; try congruence.
+  elim : n Γ t T / h; try by [].
   - hauto lq:on ctrs:Typing.
   (* DO *NOT* USE ctrs: in this case *)
   - hauto l:on.
@@ -781,6 +842,30 @@ Proof.
   elim : n Γ A0 T / h; try congruence.
   - qauto l:on inv:Typing.
   - sfirstorder inv:Typing.
+Qed.
+
+Lemma pi_inv2 n Γ A B T
+  (h : Typing n Γ (pi A B) T) :
+  (* --------------------- *)
+  (exists s, type s ≡ T).
+Proof.
+  move eq : (pi A B) h => A0 h.
+  move : A B eq.
+  elim : n Γ A0 T / h; try by [].
+  - sfirstorder.
+  - hauto l:on ctrs:Typing.
+Qed.
+
+Lemma type_inv2 n Γ s T
+  (h : Typing n Γ (type s) T) :
+  (* --------------------- *)
+  (exists s0, type s0 ≡ T).
+Proof.
+  move eq : (type s) h => A0 h.
+  move : s eq.
+  elim : n Γ A0 T / h; try by [].
+  - sfirstorder.
+  - hauto l:on ctrs:Typing.
 Qed.
 
 Lemma preservation (a a' : tm) (h : Red a a') :
@@ -819,9 +904,13 @@ Lemma empty_lam_pi_inv : forall (a : tm) (Γ : context) (A B : tm),
     is_value a ->
     exists a0, a = lam a0.
 Proof.
-(*   hauto q:on inv:Typing solve:lia. *)
-  (* Qed. *)
-Admitted.
+  case; try by [].
+  - sfirstorder.
+  - move => a a0 Γ A B /pi_inv2.
+    hauto l:on use:defeq_consistent.
+  - move => s Γ A B /type_inv2.
+    hauto l:on use:defeq_consistent.
+Qed.
 
 Lemma progress (a : tm) (A  :tm) (Γ : context) (h : Typing 0 Γ a A) :
   is_value a \/ exists a', a ⤳ a'.
