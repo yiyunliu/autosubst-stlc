@@ -260,17 +260,17 @@ Lemma par_confluence A B C
   exists D, B ⇒ D /\ C ⇒ D.
 Proof.
   move :  C h0.
-  elim : A B  / h.
-  - hauto lq:on inv:Par ctrs:Par.
+  elim : A B  / h;
+    match goal with
+      | [ |- context[app]] => idtac
+      | _ => hauto lq:on inv:Par ctrs:Par
+      end.
   - move => a0 a1 b0 b1 h0 ih0 h1 ih1 C h2.
     case E : (app a0 b0) C / h2; try by[].
     (* App App *)
     + hauto lq:on inv:Par ctrs:Par.
     (* App Abs *)
     + hauto lq:on ctrs:Par inv:Par use:par_cong.
-  - hauto lq:on inv:Par ctrs:Par.
-  - hauto lq:on inv:Par ctrs:Par.
-  - hauto lq:on inv:Par ctrs:Par.
   - move => a0 a1 b0 b1 ? ? h0 ih0 h1 ih1 C h2; subst.
     case E : (app a0 b0) C / h2; try by[].
     (* App Abs *)
