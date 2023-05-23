@@ -2,26 +2,25 @@ Require Export unscoped.
 
 
 
-Section sort.
-Inductive sort  : Type :=
-  | TYPE : sort 
-  | KIND : sort .
+Section ty.
+Inductive ty  : Type :=
+  | TUnit : ty 
+  | TPi : ( ty   ) -> ( ty   ) -> ty .
 
-Lemma congr_TYPE  : TYPE  = TYPE  .
+Lemma congr_TUnit  : TUnit  = TUnit  .
 Proof. congruence. Qed.
 
-Lemma congr_KIND  : KIND  = KIND  .
+Lemma congr_TPi  { s0 : ty   } { s1 : ty   } { t0 : ty   } { t1 : ty   } (H1 : s0 = t0) (H2 : s1 = t1) : TPi s0 s1 = TPi t0 t1 .
 Proof. congruence. Qed.
 
-End sort.
+End ty.
 
 Section tm.
 Inductive tm  : Type :=
   | var_tm : ( fin ) -> tm 
   | lam : ( tm   ) -> tm 
   | app : ( tm   ) -> ( tm   ) -> tm 
-  | pi : ( tm   ) -> ( tm   ) -> tm 
-  | type : ( sort   ) -> tm .
+  | unit : tm .
 
 Lemma congr_lam  { s0 : tm   } { t0 : tm   } (H1 : s0 = t0) : lam  s0 = lam  t0 .
 Proof. congruence. Qed.
@@ -29,10 +28,7 @@ Proof. congruence. Qed.
 Lemma congr_app  { s0 : tm   } { s1 : tm   } { t0 : tm   } { t1 : tm   } (H1 : s0 = t0) (H2 : s1 = t1) : app  s0 s1 = app  t0 t1 .
 Proof. congruence. Qed.
 
-Lemma congr_pi  { s0 : tm   } { s1 : tm   } { t0 : tm   } { t1 : tm   } (H1 : s0 = t0) (H2 : s1 = t1) : pi  s0 s1 = pi  t0 t1 .
-Proof. congruence. Qed.
-
-Lemma congr_type  { s0 : sort   } { t0 : sort   } (H1 : s0 = t0) : type  s0 = type  t0 .
+Lemma congr_unit  : unit  = unit  .
 Proof. congruence. Qed.
 
 Definition upRen_tm_tm   (xi : ( fin ) -> fin) : ( fin ) -> fin :=
@@ -43,8 +39,7 @@ Fixpoint ren_tm   (xitm : ( fin ) -> fin) (s : tm ) : tm  :=
     | var_tm  s => (var_tm ) (xitm s)
     | lam  s0 => lam  ((ren_tm (upRen_tm_tm xitm)) s0)
     | app  s0 s1 => app  ((ren_tm xitm) s0) ((ren_tm xitm) s1)
-    | pi  s0 s1 => pi  ((ren_tm xitm) s0) ((ren_tm (upRen_tm_tm xitm)) s1)
-    | type  s0 => type  ((fun x => x) s0)
+    | unit   => unit 
     end.
 
 Definition up_tm_tm   (sigma : ( fin ) -> tm ) : ( fin ) -> tm  :=
@@ -55,8 +50,7 @@ Fixpoint subst_tm   (sigmatm : ( fin ) -> tm ) (s : tm ) : tm  :=
     | var_tm  s => sigmatm s
     | lam  s0 => lam  ((subst_tm (up_tm_tm sigmatm)) s0)
     | app  s0 s1 => app  ((subst_tm sigmatm) s0) ((subst_tm sigmatm) s1)
-    | pi  s0 s1 => pi  ((subst_tm sigmatm) s0) ((subst_tm (up_tm_tm sigmatm)) s1)
-    | type  s0 => type  ((fun x => x) s0)
+    | unit   => unit 
     end.
 
 Definition upId_tm_tm  (sigma : ( fin ) -> tm ) (Eq : forall x, sigma x = (var_tm ) x) : forall x, (up_tm_tm sigma) x = (var_tm ) x :=
@@ -70,8 +64,7 @@ Fixpoint idSubst_tm  (sigmatm : ( fin ) -> tm ) (Eqtm : forall x, sigmatm x = (v
     | var_tm  s => Eqtm s
     | lam  s0 => congr_lam ((idSubst_tm (up_tm_tm sigmatm) (upId_tm_tm (_) Eqtm)) s0)
     | app  s0 s1 => congr_app ((idSubst_tm sigmatm Eqtm) s0) ((idSubst_tm sigmatm Eqtm) s1)
-    | pi  s0 s1 => congr_pi ((idSubst_tm sigmatm Eqtm) s0) ((idSubst_tm (up_tm_tm sigmatm) (upId_tm_tm (_) Eqtm)) s1)
-    | type  s0 => congr_type ((fun x => (eq_refl) x) s0)
+    | unit   => congr_unit 
     end.
 
 Definition upExtRen_tm_tm   (xi : ( fin ) -> fin) (zeta : ( fin ) -> fin) (Eq : forall x, xi x = zeta x) : forall x, (upRen_tm_tm xi) x = (upRen_tm_tm zeta) x :=
@@ -85,8 +78,7 @@ Fixpoint extRen_tm   (xitm : ( fin ) -> fin) (zetatm : ( fin ) -> fin) (Eqtm : f
     | var_tm  s => (ap) (var_tm ) (Eqtm s)
     | lam  s0 => congr_lam ((extRen_tm (upRen_tm_tm xitm) (upRen_tm_tm zetatm) (upExtRen_tm_tm (_) (_) Eqtm)) s0)
     | app  s0 s1 => congr_app ((extRen_tm xitm zetatm Eqtm) s0) ((extRen_tm xitm zetatm Eqtm) s1)
-    | pi  s0 s1 => congr_pi ((extRen_tm xitm zetatm Eqtm) s0) ((extRen_tm (upRen_tm_tm xitm) (upRen_tm_tm zetatm) (upExtRen_tm_tm (_) (_) Eqtm)) s1)
-    | type  s0 => congr_type ((fun x => (eq_refl) x) s0)
+    | unit   => congr_unit 
     end.
 
 Definition upExt_tm_tm   (sigma : ( fin ) -> tm ) (tau : ( fin ) -> tm ) (Eq : forall x, sigma x = tau x) : forall x, (up_tm_tm sigma) x = (up_tm_tm tau) x :=
@@ -100,8 +92,7 @@ Fixpoint ext_tm   (sigmatm : ( fin ) -> tm ) (tautm : ( fin ) -> tm ) (Eqtm : fo
     | var_tm  s => Eqtm s
     | lam  s0 => congr_lam ((ext_tm (up_tm_tm sigmatm) (up_tm_tm tautm) (upExt_tm_tm (_) (_) Eqtm)) s0)
     | app  s0 s1 => congr_app ((ext_tm sigmatm tautm Eqtm) s0) ((ext_tm sigmatm tautm Eqtm) s1)
-    | pi  s0 s1 => congr_pi ((ext_tm sigmatm tautm Eqtm) s0) ((ext_tm (up_tm_tm sigmatm) (up_tm_tm tautm) (upExt_tm_tm (_) (_) Eqtm)) s1)
-    | type  s0 => congr_type ((fun x => (eq_refl) x) s0)
+    | unit   => congr_unit 
     end.
 
 Definition up_ren_ren_tm_tm    (xi : ( fin ) -> fin) (tau : ( fin ) -> fin) (theta : ( fin ) -> fin) (Eq : forall x, ((funcomp) tau xi) x = theta x) : forall x, ((funcomp) (upRen_tm_tm tau) (upRen_tm_tm xi)) x = (upRen_tm_tm theta) x :=
@@ -112,8 +103,7 @@ Fixpoint compRenRen_tm    (xitm : ( fin ) -> fin) (zetatm : ( fin ) -> fin) (rho
     | var_tm  s => (ap) (var_tm ) (Eqtm s)
     | lam  s0 => congr_lam ((compRenRen_tm (upRen_tm_tm xitm) (upRen_tm_tm zetatm) (upRen_tm_tm rhotm) (up_ren_ren (_) (_) (_) Eqtm)) s0)
     | app  s0 s1 => congr_app ((compRenRen_tm xitm zetatm rhotm Eqtm) s0) ((compRenRen_tm xitm zetatm rhotm Eqtm) s1)
-    | pi  s0 s1 => congr_pi ((compRenRen_tm xitm zetatm rhotm Eqtm) s0) ((compRenRen_tm (upRen_tm_tm xitm) (upRen_tm_tm zetatm) (upRen_tm_tm rhotm) (up_ren_ren (_) (_) (_) Eqtm)) s1)
-    | type  s0 => congr_type ((fun x => (eq_refl) x) s0)
+    | unit   => congr_unit 
     end.
 
 Definition up_ren_subst_tm_tm    (xi : ( fin ) -> fin) (tau : ( fin ) -> tm ) (theta : ( fin ) -> tm ) (Eq : forall x, ((funcomp) tau xi) x = theta x) : forall x, ((funcomp) (up_tm_tm tau) (upRen_tm_tm xi)) x = (up_tm_tm theta) x :=
@@ -127,8 +117,7 @@ Fixpoint compRenSubst_tm    (xitm : ( fin ) -> fin) (tautm : ( fin ) -> tm ) (th
     | var_tm  s => Eqtm s
     | lam  s0 => congr_lam ((compRenSubst_tm (upRen_tm_tm xitm) (up_tm_tm tautm) (up_tm_tm thetatm) (up_ren_subst_tm_tm (_) (_) (_) Eqtm)) s0)
     | app  s0 s1 => congr_app ((compRenSubst_tm xitm tautm thetatm Eqtm) s0) ((compRenSubst_tm xitm tautm thetatm Eqtm) s1)
-    | pi  s0 s1 => congr_pi ((compRenSubst_tm xitm tautm thetatm Eqtm) s0) ((compRenSubst_tm (upRen_tm_tm xitm) (up_tm_tm tautm) (up_tm_tm thetatm) (up_ren_subst_tm_tm (_) (_) (_) Eqtm)) s1)
-    | type  s0 => congr_type ((fun x => (eq_refl) x) s0)
+    | unit   => congr_unit 
     end.
 
 Definition up_subst_ren_tm_tm    (sigma : ( fin ) -> tm ) (zetatm : ( fin ) -> fin) (theta : ( fin ) -> tm ) (Eq : forall x, ((funcomp) (ren_tm zetatm) sigma) x = theta x) : forall x, ((funcomp) (ren_tm (upRen_tm_tm zetatm)) (up_tm_tm sigma)) x = (up_tm_tm theta) x :=
@@ -142,8 +131,7 @@ Fixpoint compSubstRen_tm    (sigmatm : ( fin ) -> tm ) (zetatm : ( fin ) -> fin)
     | var_tm  s => Eqtm s
     | lam  s0 => congr_lam ((compSubstRen_tm (up_tm_tm sigmatm) (upRen_tm_tm zetatm) (up_tm_tm thetatm) (up_subst_ren_tm_tm (_) (_) (_) Eqtm)) s0)
     | app  s0 s1 => congr_app ((compSubstRen_tm sigmatm zetatm thetatm Eqtm) s0) ((compSubstRen_tm sigmatm zetatm thetatm Eqtm) s1)
-    | pi  s0 s1 => congr_pi ((compSubstRen_tm sigmatm zetatm thetatm Eqtm) s0) ((compSubstRen_tm (up_tm_tm sigmatm) (upRen_tm_tm zetatm) (up_tm_tm thetatm) (up_subst_ren_tm_tm (_) (_) (_) Eqtm)) s1)
-    | type  s0 => congr_type ((fun x => (eq_refl) x) s0)
+    | unit   => congr_unit 
     end.
 
 Definition up_subst_subst_tm_tm    (sigma : ( fin ) -> tm ) (tautm : ( fin ) -> tm ) (theta : ( fin ) -> tm ) (Eq : forall x, ((funcomp) (subst_tm tautm) sigma) x = theta x) : forall x, ((funcomp) (subst_tm (up_tm_tm tautm)) (up_tm_tm sigma)) x = (up_tm_tm theta) x :=
@@ -157,8 +145,7 @@ Fixpoint compSubstSubst_tm    (sigmatm : ( fin ) -> tm ) (tautm : ( fin ) -> tm 
     | var_tm  s => Eqtm s
     | lam  s0 => congr_lam ((compSubstSubst_tm (up_tm_tm sigmatm) (up_tm_tm tautm) (up_tm_tm thetatm) (up_subst_subst_tm_tm (_) (_) (_) Eqtm)) s0)
     | app  s0 s1 => congr_app ((compSubstSubst_tm sigmatm tautm thetatm Eqtm) s0) ((compSubstSubst_tm sigmatm tautm thetatm Eqtm) s1)
-    | pi  s0 s1 => congr_pi ((compSubstSubst_tm sigmatm tautm thetatm Eqtm) s0) ((compSubstSubst_tm (up_tm_tm sigmatm) (up_tm_tm tautm) (up_tm_tm thetatm) (up_subst_subst_tm_tm (_) (_) (_) Eqtm)) s1)
-    | type  s0 => congr_type ((fun x => (eq_refl) x) s0)
+    | unit   => congr_unit 
     end.
 
 Definition rinstInst_up_tm_tm   (xi : ( fin ) -> fin) (sigma : ( fin ) -> tm ) (Eq : forall x, ((funcomp) (var_tm ) xi) x = sigma x) : forall x, ((funcomp) (var_tm ) (upRen_tm_tm xi)) x = (up_tm_tm sigma) x :=
@@ -172,8 +159,7 @@ Fixpoint rinst_inst_tm   (xitm : ( fin ) -> fin) (sigmatm : ( fin ) -> tm ) (Eqt
     | var_tm  s => Eqtm s
     | lam  s0 => congr_lam ((rinst_inst_tm (upRen_tm_tm xitm) (up_tm_tm sigmatm) (rinstInst_up_tm_tm (_) (_) Eqtm)) s0)
     | app  s0 s1 => congr_app ((rinst_inst_tm xitm sigmatm Eqtm) s0) ((rinst_inst_tm xitm sigmatm Eqtm) s1)
-    | pi  s0 s1 => congr_pi ((rinst_inst_tm xitm sigmatm Eqtm) s0) ((rinst_inst_tm (upRen_tm_tm xitm) (up_tm_tm sigmatm) (rinstInst_up_tm_tm (_) (_) Eqtm)) s1)
-    | type  s0 => congr_type ((fun x => (eq_refl) x) s0)
+    | unit   => congr_unit 
     end.
 
 Lemma rinstInst_tm   (xitm : ( fin ) -> fin) : ren_tm xitm = subst_tm ((funcomp) (var_tm ) xitm) .
@@ -216,8 +202,6 @@ Lemma renRen'_tm    (xitm : ( fin ) -> fin) (zetatm : ( fin ) -> fin) : (funcomp
 Proof. exact ((FunctionalExtensionality.functional_extensionality _ _ ) (fun n => renRen_tm xitm zetatm n)). Qed.
 
 End tm.
-
-
 
 
 

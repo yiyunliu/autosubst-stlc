@@ -1,7 +1,7 @@
 axioms.v
 coc_unscoped.v
 fintype.v
-header_extensible.v
+stlc_unscoped.v
 stlc.v
 typing_coc_unscoped.v
 typing_unscoped.v
