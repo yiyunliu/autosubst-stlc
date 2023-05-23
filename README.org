@@ -2,4 +2,8 @@
 This repository contains the type soundness proof of the simply typed
 lambda calculus and the calculus of constructions.
 
-To
+To build the project, run the following:
+#+begin_src sh
+coq_makefile -f _CoqProject -o Makefile
+make
+#+end_src
